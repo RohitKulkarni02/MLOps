@@ -457,8 +457,8 @@ Two screenshots in the Lab_1 root document a successful run of the modified DAG:
 
 - **ss_1** — Successful run: Grid or Graph view with **Airflow_Lab1** and all tasks in **success** (green) for one run.
 
-  ![Successful DAG run (ss_1)](ss_1.png)
+  ![Successful DAG run (ss_1)](Labs/Airflow_Labs/Lab_1/ss_1.jpeg)
 
 - **ss_2** — Graph view: The **Airflow_Lab1** DAG in **Graph** view, showing all six tasks and their dependencies.
 
-  ![DAG Graph view (ss_2)](ss_2.png)
+  ![DAG Graph view (ss_2)](Labs/Airflow_Labs/Lab_1/ss_2.jpeg)
