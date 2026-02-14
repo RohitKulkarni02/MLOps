@@ -1,9 +1,9 @@
 # Import necessary libraries and modules
 from airflow import DAG
 # from airflow.operators.python import PythonOperator
-from airflow.providers.standard.operators.python import PythonOperator
+from airflow.operators.python import PythonOperator
 from datetime import datetime, timedelta
-from src.lab import load_data, data_preprocessing, build_save_model, load_model_elbow
+from src.lab import load_data, validate_data, data_preprocessing, build_save_model, load_model_elbow, report_metrics
 
 # NOTE:
 # In Airflow 3.x, enabling XCom pickling should be done via environment variable:
@@ -26,17 +26,24 @@ with DAG(
     catchup=False,
 ) as dag:
 
-    # Task to load data, calls the 'load_data' Python function
+    # Task to load data
     load_data_task = PythonOperator(
         task_id='load_data_task',
         python_callable=load_data,
     )
 
-    # Task to perform data preprocessing, depends on 'load_data_task'
+    # Task to validate data (shape, nulls) before preprocessing
+    validate_data_task = PythonOperator(
+        task_id='validate_data_task',
+        python_callable=validate_data,
+        op_args=[load_data_task.output],
+    )
+
+    # Task to perform data preprocessing, depends on 'validate_data_task'
     data_preprocessing_task = PythonOperator(
         task_id='data_preprocessing_task',
         python_callable=data_preprocessing,
-        op_args=[load_data_task.output],
+        op_args=[validate_data_task.output],
     )
 
     # Task to build and save a model, depends on 'data_preprocessing_task'
@@ -53,8 +60,15 @@ with DAG(
         op_args=["model.sav", build_save_model_task.output],
     )
 
+    # Task to write a short metrics report (cluster sizes, silhouette) to working_data/cluster_report.txt
+    report_metrics_task = PythonOperator(
+        task_id='report_metrics_task',
+        python_callable=report_metrics,
+        op_args=["model.sav", "cluster_report.txt"],
+    )
+
     # Set task dependencies
-    load_data_task >> data_preprocessing_task >> build_save_model_task >> load_model_task
+    load_data_task >> validate_data_task >> data_preprocessing_task >> build_save_model_task >> load_model_task >> report_metrics_task
 
 # If this script is run directly, allow command-line interaction with the DAG
 if __name__ == "__main__":

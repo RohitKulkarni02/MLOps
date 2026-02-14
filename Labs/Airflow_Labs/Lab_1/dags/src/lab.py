@@ -1,11 +1,13 @@
+import os
+import base64
+import pickle
+from collections import Counter
+
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.cluster import KMeans
 from sklearn.metrics import silhouette_score
 from kneed import KneeLocator
-import pickle
-import os
-import base64
 
 def load_data():
     """
@@ -17,6 +19,22 @@ def load_data():
     df = pd.read_csv(os.path.join(os.path.dirname(__file__), "../data/file.csv"))
     serialized_data = pickle.dumps(df)                    # bytes
     return base64.b64encode(serialized_data).decode("ascii")  # JSON-safe string
+
+def validate_data(data_b64: str):
+    """
+    Validates loaded data: checks shape and null counts, logs a short summary.
+    Returns the same data_b64 unchanged so the next task receives the same payload.
+    """
+    data_bytes = base64.b64decode(data_b64)
+    df = pickle.loads(data_bytes)
+    n_rows, n_cols = df.shape
+    null_counts = df.isnull().sum()
+    n_nulls = null_counts.sum()
+    print(f"Validation: shape=({n_rows}, {n_cols}), total nulls={n_nulls}")
+    if n_nulls > 0:
+        print("Columns with nulls:", null_counts[null_counts > 0].to_dict())
+    return data_b64
+
 
 def data_preprocessing(data_b64: str):
     """
@@ -95,3 +113,45 @@ def load_model_elbow(filename: str, sse: list):
     except Exception:
         # if not numeric, still return a JSON-friendly version
         return pred.item() if hasattr(pred, "item") else pred
+
+
+def report_metrics(model_filename: str, out_filename: str = "cluster_report.txt"):
+    """
+    Loads the saved model and training data, computes cluster sizes and
+    silhouette score, and writes a short text report to working_data/.
+    Returns the output file path (JSON-safe string).
+    """
+    data_dir = os.path.join(os.path.dirname(__file__), "../data")
+    model_dir = os.path.join(os.path.dirname(__file__), "../model")
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))
+    working_data_dir = os.path.join(project_root, "working_data")
+    os.makedirs(working_data_dir, exist_ok=True)
+
+    df = pd.read_csv(os.path.join(data_dir, "file.csv"))
+    df = df.dropna()
+    feature_cols = ["BALANCE", "PURCHASES", "CREDIT_LIMIT"]
+    X = df[feature_cols].copy()
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(X)
+
+    with open(os.path.join(model_dir, model_filename), "rb") as f:
+        model = pickle.load(f)
+    labels = model.predict(X_scaled)
+    sil = silhouette_score(X_scaled, labels)
+    sizes = Counter(labels)
+    lines = [
+        "Cluster metrics report",
+        "======================",
+        f"n_clusters: {model.n_clusters}",
+        f"silhouette_score: {sil:.4f}",
+        "cluster sizes:",
+    ]
+    for c in sorted(sizes.keys()):
+        lines.append(f"  cluster {c}: {sizes[c]} samples")
+    lines.append(f"total samples: {len(labels)}")
+    report = "\n".join(lines)
+    out_path = os.path.join(working_data_dir, out_filename)
+    with open(out_path, "w") as f:
+        f.write(report)
+    print(f"Wrote report to {out_path}")
+    return out_path

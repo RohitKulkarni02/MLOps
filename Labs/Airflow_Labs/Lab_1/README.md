@@ -301,70 +301,164 @@ if __name__ == "__main__":
 
 ### Running an Apache Airflow DAG Pipeline in Docker
 
-This guide provides detailed steps to set up and run an Apache Airflow Directed Acyclic Graph (DAG) pipeline within a Docker container using Docker Compose. The pipeline is named "your_python_dag."
+This section describes how to set up and run the **Airflow_Lab1** DAG in Docker and what the run looks like (including the two submission screenshots).
 
 #### Prerequisites
 
-- Docker: Make sure Docker is installed and running on your system.
+- **Docker Desktop** installed and running (allocate at least 4GB RAM, ideally 8GB).
+- Terminal opened in the **Lab_1** directory.
 
-#### Step 1: Directory Structure
+#### Step 1: Directory structure
 
-Ensure your project has the following directory structure:
+The project layout:
 
 ```plaintext
-your_airflow_project/
+Lab_1/
 ├── dags/
-│   ├── airflow.py     # Your DAG script
-├── src/
-│   ├── lab.py                # Data processing and modeling functions
-├── data/                       # Directory for data (if needed)
-├── docker-compose.yaml         # Docker Compose configuration
+│   ├── airflow.py          # DAG definition
+│   ├── src/
+│   │   └── lab.py          # ML pipeline (load, validate, preprocess, model, report)
+│   └── data/
+│       ├── file.csv        # training data
+│       └── test.csv        # test data
+├── working_data/           # DAG output (e.g. cluster_report.txt)
+├── docker-compose.yaml     # Airflow + Postgres
+├── setup.sh                # Professor’s one-time setup script
+├── ss_1.png                # Screenshot: successful DAG run (all tasks green)
+└── ss_2.png                # Screenshot: DAG Graph view (6 tasks and dependencies)
 ```
 
-#### Step 2: Docker Compose Configuration
+#### Step 2: One-time setup (professor’s script)
 
-Create a docker-compose.yaml file in the project root directory. This file defines the services and configurations for running Airflow in a Docker container.
+From the **Lab_1** directory run:
 
-#### Step 3: Start the Docker containers by running the following command
+```bash
+bash setup.sh
+```
 
-```plaintext
+This removes old `.env`, `logs/`, `plugins/`, `config/`, runs `docker compose down -v`, recreates `logs`, `plugins`, `config`, `working_data`, writes `AIRFLOW_UID` to `.env`, and runs `docker compose run --rm airflow-cli airflow config list` (first time may take a while while the DB initializes). The included `docker-compose.yaml` mounts `./dags` and `./working_data`, sets `LOAD_EXAMPLES: false`, and adds `pandas`, `scikit-learn`, and `kneed`.
+
+#### Step 3: Start Airflow
+
+```bash
 docker compose up
 ```
 
-Wait until you see the log message indicating that the Airflow webserver is running:
+Wait until the webserver is ready (e.g. log line with `GET /health HTTP/1.1" 200`). Leave this terminal running.
 
-```plaintext
-app-airflow-webserver-1 | 127.0.0.1 - - [17/Feb/2023:09:34:29 +0000] "GET /health HTTP/1.1" 200 141 "-" "curl/7.74.0"
+#### Step 4: Open the Airflow UI
+
+1. In your browser go to **http://localhost:8080**.
+2. Log in with **Username:** `airflow`, **Password:** `airflow`.
+
+#### Step 5: Run the DAG and capture outputs
+
+1. On the DAGs page, find **Airflow_Lab1** and turn it **ON** if needed.
+2. Open the **Graph** tab to see the six tasks and their order:  
+   `load_data_task` → `validate_data_task` → `data_preprocessing_task` → `build_save_model_task` → `load_model_task` → `report_metrics_task`.
+3. Click **Trigger DAG** (play button) and wait for the run to finish (all tasks green). The pipeline may take 1–2 minutes because of model training.
+4. After a successful run, the saved model appears under `dags/model/` and the metrics report under `working_data/cluster_report.txt`.
+
+#### Step 6: Stop Airflow
+
+In the terminal where `docker compose up` is running, press **Ctrl+C**, then:
+
+```bash
+docker compose down
 ```
 
-#### Step 4: Access Airflow Web Interface
-
-- Open a web browser and navigate to http://localhost:8080.
-
-- Log in with the credentials set in the .env file or use the default credentials (username: admin, password: admin).
-
-- Once logged in, you'll be on the Airflow web interface.
-
-#### Step 5: Trigger the DAG
-
-- In the Airflow web interface, navigate to the "DAGs" page.
-
-- You should see the "your_python_dag" listed.
-
-- To manually trigger the DAG, click on the "Trigger DAG" button or enable the DAG by toggling the switch to the "On" position.
-
-- Monitor the progress of the DAG in the Airflow web interface. You can view logs, task status, and task execution details.
-
-#### Step 6: Pipeline Outputs
-
-- Once the DAG completes its execution, check any output or artifacts produced by your functions and tasks.
+To also remove the database volume: `docker compose down -v`.
 
 ---
 
-### Modifications (Lab submission)
+### Changes made (Lab submission)
 
-Two changes were made:
+This lab is not identical to the original repo. Below is a detailed list of all modifications.
 
-1. **Preprocessing:** `MinMaxScaler` was replaced with **StandardScaler**. StandardScaler centers the data and scales by standard deviation, which can be better when features have different units or when we care about relative spread rather than bounding to [0,1].
+---
 
-2. **Model selection:** Instead of saving the last-fitted model (k=49), the pipeline now uses the **Silhouette score** to choose the optimal number of clusters. For each k from 2 to 49 we compute the Silhouette score (how well separated the clusters are), pick the k that maximizes it, fit a final K-Means with that k, and save that model. The elbow method is still computed and printed for comparison.
+#### 1. Preprocessing: MinMaxScaler → StandardScaler
+
+**File:** `dags/src/lab.py`  
+**Function:** `data_preprocessing()`
+
+- **Original behaviour:** Features `BALANCE`, `PURCHASES`, and `CREDIT_LIMIT` were scaled with **MinMaxScaler** (values in [0, 1]).
+- **Change:** MinMaxScaler was replaced with **StandardScaler**.
+- **Reason:** StandardScaler centres the data (zero mean) and scales by standard deviation (unit variance). This is often better when features have different units or when we care about relative spread rather than a fixed [0, 1] range.
+- **Code:** `MinMaxScaler()` and `fit_transform(clustering_data)` were replaced with `StandardScaler()` and `fit_transform(clustering_data)`; variable names were updated accordingly (e.g. `clustering_data_scaled`).
+
+---
+
+#### 2. Model selection: fixed k=49 → Silhouette-based optimal k
+
+**File:** `dags/src/lab.py`  
+**Function:** `build_save_model()`
+
+- **Original behaviour:** The loop fitted KMeans for k = 1, 2, …, 49; the **last** model (k = 49) was saved. The elbow method was used only for reporting.
+- **Change:** The pipeline now uses the **Silhouette score** to choose the number of clusters:
+  - For each k from 2 to 49, KMeans is fitted and the Silhouette score is computed (k = 1 is skipped because Silhouette is undefined for a single cluster).
+  - The k with the **maximum** Silhouette score is selected.
+  - A **final** KMeans model is fitted with this optimal k and **that** model is saved (not k = 49).
+- **Reason:** Silhouette score measures how well separated and compact the clusters are; maximising it gives a data-driven choice of k instead of saving an arbitrary large k.
+- **Code:** `silhouette_score` from `sklearn.metrics` is used; after the loop, `optimal_k` is set to `2 + silhouette_scores.index(max(silhouette_scores))`, and `final_kmeans = KMeans(n_clusters=optimal_k, ...)` is fitted and saved. The function still returns the SSE list so the elbow method can be reported elsewhere.
+
+**Function:** `load_model_elbow()`
+
+- **Change:** Logging was updated to reflect that the loaded model was trained with Silhouette-chosen k. It now prints both “Model clusters (chosen by Silhouette score): &lt;k&gt;” and “Elbow method suggests k: &lt;k_elbow&gt;” for comparison.
+
+---
+
+#### 3. DAG structure: two new tasks
+
+**File:** `dags/airflow.py`
+
+The DAG was extended with two additional tasks so the workflow is different from the original and from a “single model + predictions CSV” style pipeline.
+
+**New task 1 — `validate_data_task`**
+
+- **Placement:** Runs immediately after `load_data_task` and before `data_preprocessing_task`.
+- **Purpose:** Data validation step: decode the base64 payload from load_data, inspect the DataFrame (shape and null counts), and log a short summary (e.g. “Validation: shape=(8950, 18), total nulls=314” and which columns have nulls). The same payload is returned unchanged so the next task receives the same data.
+- **Implementation:** New function `validate_data(data_b64)` in `dags/src/lab.py`. It decodes the pickled DataFrame, runs `df.shape` and `df.isnull().sum()`, prints the summary, and returns the original `data_b64` string.
+- **Effect:** The DAG now has an explicit data-quality check before preprocessing.
+
+**New task 2 — `report_metrics_task`**
+
+- **Placement:** Runs after `load_model_task` (last task in the pipeline).
+- **Purpose:** Produce a small **text report** of clustering metrics (not a full predictions CSV). It loads the saved KMeans model and the training data, applies the same StandardScaler preprocessing, predicts cluster labels, computes the Silhouette score and per-cluster sample counts, and writes a report to `working_data/cluster_report.txt`.
+- **Implementation:** New function `report_metrics(model_filename, out_filename)` in `dags/src/lab.py`. It reads `file.csv`, drops nulls, scales the three features with StandardScaler, loads the model from `dags/model/`, runs `model.predict()`, computes `silhouette_score()` and cluster sizes (e.g. with `Counter`), and writes lines such as “n_clusters”, “silhouette_score”, “cluster sizes”, “total samples” to a file under `working_data/` (path derived from project root so it works in Docker and locally).
+- **Effect:** The pipeline produces (1) the saved model in `dags/model/` and (2) a metrics report file; the artifact is a short report, not a large predictions CSV.
+
+**Updated task order**
+
+- **Original:** `load_data_task` → `data_preprocessing_task` → `build_save_model_task` → `load_model_task`
+- **New:**  
+  `load_data_task` → **`validate_data_task`** → `data_preprocessing_task` → `build_save_model_task` → `load_model_task` → **`report_metrics_task`**
+
+**DAG code changes:** In `airflow.py`, `validate_data` and `report_metrics` are imported from `src.lab`; `validate_data_task` is added with `op_args=[load_data_task.output]`; `data_preprocessing_task` now takes `validate_data_task.output` instead of `load_data_task.output`; `report_metrics_task` is added with `op_args=["model.sav", "cluster_report.txt"]`; the dependency chain is updated to the order above.
+
+---
+
+#### 4. Summary of files and functions modified
+
+| Location          | Change                                                                                                                    |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `dags/src/lab.py` | Use StandardScaler instead of MinMaxScaler in `data_preprocessing()`.                                                     |
+| `dags/src/lab.py` | In `build_save_model()`, add Silhouette-based choice of k and save the model with that k; return SSE for elbow reporting. |
+| `dags/src/lab.py` | In `load_model_elbow()`, update logs to show Silhouette-chosen k and elbow k.                                             |
+| `dags/src/lab.py` | Add `validate_data(data_b64)` for shape and null checks.                                                                  |
+| `dags/src/lab.py` | Add `report_metrics(model_filename, out_filename)` to write `working_data/cluster_report.txt`.                            |
+| `dags/airflow.py` | Add `validate_data_task` and `report_metrics_task`; wire new dependencies and update `data_preprocessing_task` input.     |
+
+---
+
+#### 5. Screenshots (submission)
+
+Two screenshots in the Lab_1 root document a successful run of the modified DAG:
+
+- **ss_1** — Successful run: Grid or Graph view with **Airflow_Lab1** and all tasks in **success** (green) for one run.
+
+  ![Successful DAG run (ss_1)](ss_1.png)
+
+- **ss_2** — Graph view: The **Airflow_Lab1** DAG in **Graph** view, showing all six tasks and their dependencies.
+
+  ![DAG Graph view (ss_2)](ss_2.png)
