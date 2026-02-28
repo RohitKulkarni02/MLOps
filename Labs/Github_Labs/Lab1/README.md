@@ -176,3 +176,42 @@ Please refer [this](https://github.com/raminmohammadi/MLOps/blob/main/Github_Lab
 - Run unittests: In this step, the unittest tests are executed using the command python -m unittest test.test_unittest. It runs the unittest test suite defined in the test.test_unittest module.
 - Notify on success: This step uses conditional logic with if: success() to check if all the unittest tests passed successfully. If they did, it runs the message "Unit tests passed successfully."
 - Notify on failure: Similarly, this step uses conditional logic with if: failure() to check if any of the unittest tests failed. If any test failed, it runs the message "Unit tests failed."
+
+---
+
+## Changes made (Lab submission)
+
+The following modifications were made so this lab is not identical to the original repo.
+
+### Code and tests
+
+- **New function `fun5` in `src/calculator.py`:** Takes two numbers `x`, `y` and returns `x ** y` (power). Raises `ValueError` if either input is not a number. Mirrors the style of `fun1`–`fun4`.
+- **Tests for `fun5`:** Added in both `test/test_pytest.py` (e.g. `test_fun5` with assertions and `pytest.raises(ValueError)`) and `test/test_unittest.py` (e.g. `test_fun5` with `assertEqual` and `assertRaises(ValueError)`).
+
+### New workflow
+
+- **`workflows/lint.yml` (Lint with ruff):** Runs on every push to `main`/`releases/**` and on pull requests to `main`. Single job that checks out code, sets up Python 3.10, installs `ruff`, and runs `ruff check src`. Ensures style/quality checks run in CI separately from tests.
+
+### Updates to existing workflows
+
+- **`github_lab1_pytest_action.yml`:**
+  - Fixed typo: `run-nam` → `run-name`.
+  - **Triggers:** Added `pull_request: branches: [main]` so tests run on PRs as well as push.
+  - **Python:** Switched to a matrix with Python `3.9` and `3.10` (replacing a single 3.8).
+  - **Artifacts:** Test report is uploaded only when tests fail (`if: failure()`), with artifact name including the matrix Python version (e.g. `pytest-results-3.10`).
+  - Updated actions to `checkout@v4`, `setup-python@v5`, `upload-artifact@v4`.
+- **`github_lab2_unittest_action.yml`:**
+  - **Triggers:** Added `pull_request: branches: [main]`.
+  - **Python:** Matrix with `3.9` and `3.10` (replacing single 3.8).
+  - Updated actions to `checkout@v4`, `setup-python@v5`.
+
+### Summary
+
+| Item | Change |
+|------|--------|
+| `src/calculator.py` | Added `fun5(x, y)` (power, with ValueError for non-numeric inputs). |
+| `test/test_pytest.py` | Added `test_fun5`. |
+| `test/test_unittest.py` | Added `test_fun5`. |
+| `workflows/lint.yml` | New workflow: ruff check on `src/` on push and PR. |
+| `workflows/github_lab1_pytest_action.yml` | run-name fix, pull_request trigger, Python 3.9/3.10 matrix, upload artifact on failure only, newer actions. |
+| `workflows/github_lab2_unittest_action.yml` | pull_request trigger, Python 3.9/3.10 matrix, newer actions. |

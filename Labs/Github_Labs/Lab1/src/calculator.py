@@ -58,6 +58,22 @@ def fun4(x,y,z):
     return total_sum
 
 
+def fun5(x, y):
+    """
+    Raises x to the power of y.
+    Args:
+        x (int/float): Base.
+        y (int/float): Exponent.
+    Returns:
+        int/float: x ** y.
+    Raises:
+        ValueError: If x or y is not a number.
+    """
+    if not (isinstance(x, (int, float)) and isinstance(y, (int, float))):
+        raise ValueError("Both inputs must be numbers.")
+    return x ** y
+
+
 # f1_op = fun1(2,3)
 # f2_op = fun2(2,3)
 # f3_op = fun3(2,3)

@@ -36,6 +36,13 @@ class TestCalculator(unittest.TestCase):
         self.assertEqual(calculator.fun4(-1, -1, -1), -3)
         self.assertEqual(calculator.fun4(-1, -1, 100), 98)
 
+    def test_fun5(self):
+        self.assertEqual(calculator.fun5(2, 3), 8)
+        self.assertEqual(calculator.fun5(5, 0), 1)
+        self.assertEqual(calculator.fun5(-2, 2), 4)
+        self.assertEqual(calculator.fun5(10, 2), 100)
+        with self.assertRaises(ValueError):
+            calculator.fun5("a", 2)
 
 
 if __name__ == '__main__':

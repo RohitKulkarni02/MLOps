@@ -27,4 +27,12 @@ def test_fun4():
     assert calculator.fun4 (-1, -1, -1) == -3
     
     assert calculator.fun4 (-1, -1, 100) == 98
-    
+
+
+def test_fun5():
+    assert calculator.fun5(2, 3) == 8
+    assert calculator.fun5(5, 0) == 1
+    assert calculator.fun5(-2, 2) == 4
+    assert calculator.fun5(10, 2) == 100
+    with pytest.raises(ValueError):
+        calculator.fun5("a", 2)
