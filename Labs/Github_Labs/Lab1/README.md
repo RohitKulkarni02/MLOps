@@ -181,7 +181,7 @@ Please refer [this](https://github.com/raminmohammadi/MLOps/blob/main/Github_Lab
 
 ## Changes made (Lab submission)
 
-The following modifications were made so this lab is not identical to the original repo.
+The following modifications were made to this lab.
 
 ### Code and tests
 
