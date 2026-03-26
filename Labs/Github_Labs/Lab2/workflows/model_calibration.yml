@@ -4,18 +4,25 @@ on:
   schedule:
     - cron: '0 0 * * *'  #minutes, hours, day, month, day of week 
 
+defaults:
+  run:
+    working-directory: Labs/Github_Labs/Lab2
+
+permissions:
+  contents: write
+
 jobs:
   retrain:
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
 
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v5
       with:
-        python-version: 3.9
+        python-version: "3.9"
 
     - name: Install dependencies
       run: pip install -r requirements.txt
@@ -24,15 +31,7 @@ jobs:
       run: |
         timestamp=$(date '+%Y%m%d%H%M%S')
         echo "$timestamp" > timestamp.txt
-      id: timestamp 
-
-    - name: Check File Permissions
-      run: |
-        ls -l ./src/train_model.py
-
-    - name: Set File Permissions
-      run: |
-        chmod +x ./src/train_model.py
+      id: timestamp
 
     - name: Retrain Model
       run: |
@@ -42,24 +41,22 @@ jobs:
     - name: Evaluate Model and Log Metrics
       run: |
         timestamp=$(cat timestamp.txt) # Use the timestamp in your training script
-        python ./src/evaluate_model.py  --timestamp "$timestamp" # Assuming you have a script for model evaluation
-        metrics_filename="${timestamp}_metrics.json"
-        mv $metrics_filename $GITHUB_WORKSPACE/metrics/$metrics_filename
-      continue-on-error: false  # Continue even if evaluation fails
-
-    - name: Store and Version the New Model
-      run: |
-        timestamp=$(cat timestamp.txt)
-        model_filename="model_${timestamp}_dt_model.joblib"
-        mv $model_filename $GITHUB_WORKSPACE/models/$model_filename
+        python ./src/evaluate_model.py --timestamp "$timestamp"
 
     - name: Commit and Push Changes
       run: |
         git config --global user.email "26876927+raminmohammadi@users.noreply.github.com"
         git config --global user.name "raminmohammadi"
-        git add $GITHUB_WORKSPACE/metrics/$metrics_filename $GITHUB_WORKSPACE/models/$model_filename
-        git commit -m "Add metrics and updated model"
-        git push
+        timestamp=$(cat timestamp.txt)
+        metrics_filename="metrics/${timestamp}_metrics.json"
+        model_filename="models/model_${timestamp}_dt_model.joblib"
+        git add -f "$metrics_filename" "$model_filename"
+        # Commit only if there are changes
+        if ! git diff --cached --quiet; then
+          git commit -m "Add metrics and updated model"
+          git push
+        else
+          echo "No changes to commit."
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
